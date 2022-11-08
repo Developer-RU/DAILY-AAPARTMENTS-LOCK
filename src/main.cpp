@@ -1,10 +1,21 @@
 #include "main.hpp"
 
 
+#include <stdint.h>
+#include <string.h>
+#include "nrf.h"
+#include "nrf51_bitfields.h"
+#include "ble_hci.h"
+
+
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-// void SWI2_IRQn(void);
+//void SWI2_IRQn(void);
+void wakeUp();
+
 void SWI2_IRQHandler(void);
 //void TIMER1_IRQHandler(void);
 //void TIMER2_IRQHandler(void);
@@ -59,10 +70,10 @@ BLEStringCharacteristic TEMP_LEVEL_INPUT_DP_H = BLEStringCharacteristic(TEMP_LEV
 BLEService BATT_PS_H = BLEService(BATTERY_SERVICE_UUID);
 BLEStringCharacteristic BATT_LEVEL_INPUT_DP_H = BLEStringCharacteristic(BATT_LEVEL, BLERead | BLENotify, sizeof((String)BATT_LEVEL));
 
-//// Time information service ////
-BLEService TIME_PS_H = BLEService(TIME_SERVICE_UUID);
-BLEUnsignedLongCharacteristic TIME_LOCAL_DP_H = BLEUnsignedLongCharacteristic(TIME_LOCAL, BLERead | BLENotify);
-BLEUnsignedLongCharacteristic TIME_CURRENT_DP_H = BLEUnsignedLongCharacteristic(TIME_CURRENT, BLERead | BLEWrite);
+//// UART service ////
+BLEService UART_SERVICE_H = BLEService(UART_SERVICE_UUID);
+BLEUnsignedLongCharacteristic UART_SERVICE_RX_H = BLEUnsignedLongCharacteristic(UART_SERVICE_RX, BLEWrite);
+BLEUnsignedLongCharacteristic UART_SERVICE_TX_H = BLEUnsignedLongCharacteristic(UART_SERVICE_TX, BLERead | BLENotify);
 
 
 String cpuID = "";
@@ -76,6 +87,68 @@ unsigned long current_time = 0;
 // unsigned long counterTick = 0;
 
 
+
+
+
+
+
+
+/**@brief     Error handler function, which is called when an error has occurred.
+ *
+ * @warning   This handler is an example only and does not fit a final product. You need to analyze
+ *            how your product is supposed to react in case of error.
+ *
+ * @param[in] error_code  Error code supplied to the handler.
+ * @param[in] line_num    Line number where the handler is called.
+ * @param[in] p_file_name Pointer to the file name. 
+ */
+void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p_file_name)
+{
+    // This call can be used for debug purposes during application development.
+    // @note CAUTION: Activating this code will write the stack to flash on an error.
+    //                This function should NOT be used in a final product.
+    //                It is intended STRICTLY for development/debugging purposes.
+    //                The flash write will happen EVEN if the radio is active, thus interrupting
+    //                any communication.
+    //                Use with care. Un-comment the line below to use.
+    //ble_debug_assert_handler(error_code, line_num, p_file_name);
+
+    // On assert, the system can only recover with a reset.
+    NVIC_SystemReset();
+}
+
+/**@brief   Function for the GAP initialization.
+ *
+ * @details This function will setup all the necessary GAP (Generic Access Profile)
+ *          parameters of the device. It also sets the permissions and appearance.
+ */
+/*
+static void gap_params_init(void)
+{
+    uint32_t                err_code;
+    ble_gap_conn_params_t   gap_conn_params;
+    ble_gap_conn_sec_mode_t sec_mode;
+
+    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
+    
+    err_code = sd_ble_gap_device_name_set(&sec_mode,
+                                          (const uint8_t *) DEVICE_NAME,
+                                          strlen(DEVICE_NAME));
+    // APP_ERROR_CHECK(err_code);
+
+    memset(&gap_conn_params, 0, sizeof(gap_conn_params));
+
+    gap_conn_params.min_conn_interval = MIN_CONN_INTERVAL;
+    gap_conn_params.max_conn_interval = MAX_CONN_INTERVAL;
+    gap_conn_params.slave_latency     = SLAVE_LATENCY;
+    gap_conn_params.conn_sup_timeout  = CONN_SUP_TIMEOUT;
+
+    err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
+    
+    // APP_ERROR_CHECK(err_code);
+}
+*/
+
 /**
  * @brief 
  * 
@@ -85,11 +158,14 @@ void TIMER1_IRQHandler(void)
 {
     // Сброс флага, сигнализирующего об окончании счета
 	NRF_TIMER1->EVENTS_COMPARE[0] = 0;
+
     //NRF_TIMER1->TASKS_CLEAR = 1;  // clear the task first to be usable for later
+
     // Очищение счетного регистра
 	//NRF_ADC->TASKS_STOP = 1;
 	NRF_ADC->TASKS_START = 1;
 }
+
 void start_timer_1(void)
 {
 	NRF_TIMER1->POWER = 1;
@@ -138,25 +214,27 @@ void ADC_IRQHandler(void)
  * @brief 
  * 
  */
+/*
 void adc_init(void)
 {
-    /* Функция инициализации АЦП */
-    /* АЦП - 10 бит, Делитель напряжения - 1/3, Канал преобразования - 2 */
+    // Функция инициализации АЦП 
+    // АЦП - 10 бит, Делитель напряжения - 1/3, Канал преобразования - 2 
     NRF_ADC->CONFIG  |=  (ADC_CONFIG_RES_10bit << ADC_CONFIG_RES_Pos) | (ADC_CONFIG_INPSEL_AnalogInputOneThirdPrescaling << ADC_CONFIG_INPSEL_Pos) | (ADC_CONFIG_PSEL_AnalogInput2 << ADC_CONFIG_PSEL_Pos);
 
-    /* Активация прерывания по окончанию преобразования */
+    // Активация прерывания по окончанию преобразования 
     NRF_ADC->INTENSET |= ADC_INTENSET_END_Enabled << ADC_INTENSET_END_Pos;
 
-    /* Включение АЦП */
+    // Включение АЦП
     NRF_ADC->ENABLE |= ADC_ENABLE_ENABLE_Enabled << ADC_ENABLE_ENABLE_Pos;
 
-    /* Разрешение прерываний в NVIC и установка приоритета */	
+    // Разрешение прерываний в NVIC и установка приоритета	
     NVIC_SetPriority(ADC_IRQn, 0);
     NVIC_EnableIRQ(ADC_IRQn);
 
-    /* Запустить одиночное преобразование */	
+    // Запустить одиночное преобразование	
     // NRF_ADC->TASKS_START = 1;					
 }
+*/
 
 /**
  * @brief 
@@ -174,10 +252,9 @@ void TIMER2_IRQHandler(void)
     {
         NRF_TIMER2->EVENTS_COMPARE[1] = 0;                  //Clear compare register 1 event
         digitalWrite(PIN_LED1, LOW);                        //Clear LED
-    
-        counterTick++; if(counterTick == 100) { counterTick = 0; flagUpdate = true; }
     }
 }
+*/
 
 /**
  * @brief 
@@ -188,7 +265,7 @@ void start_timer_2(void)
 {
     NRF_TIMER2->MODE = TIMER_MODE_MODE_Timer;               // Set the timer in Counter Mode
     NRF_TIMER2->TASKS_CLEAR = 1;                            // clear the task first to be usable for later
-    NRF_TIMER2->PRESCALER = 6;                              //Set prescaler. Higher number gives slower timer. Prescaler = 0 gives 16MHz timer
+    NRF_TIMER2->PRESCALER = 8;                              //Set prescaler. Higher number gives slower timer. Prescaler = 0 gives 16MHz timer
     NRF_TIMER2->BITMODE = TIMER_BITMODE_BITMODE_16Bit;      //Set counter to 16 bit resolution
     NRF_TIMER2->CC[0] = 25000;                              //Set value for TIMER2 compare register 0
     NRF_TIMER2->CC[1] = 25;                                  //Set value for TIMER2 compare register 1
@@ -208,6 +285,17 @@ void SWI2_IRQHandler(void)
     // NOOP
     // sd_power_system_off();
 }
+
+
+
+void wakeUp()
+{
+    digitalWrite(PIN_LED1, !digitalRead(PIN_LED1));
+    delay(200);
+}
+
+
+
 
 /**
  * @brief 
@@ -365,12 +453,24 @@ void services_init()
     blePeripheral.addAttribute(BATT_PS_H);
     blePeripheral.addAttribute(BATT_LEVEL_INPUT_DP_H);  
 
-    //// Time information service ////
-    blePeripheral.setAdvertisedServiceUuid(TIME_PS_H.uuid());
-    blePeripheral.addAttribute(TIME_PS_H);
-    blePeripheral.addAttribute(TIME_LOCAL_DP_H);    
-    blePeripheral.addAttribute(TIME_CURRENT_DP_H);    
+    //// UART service ////
+    blePeripheral.setAdvertisedServiceUuid(UART_SERVICE_H.uuid());
+    blePeripheral.addAttribute(UART_SERVICE_H);
+    blePeripheral.addAttribute(UART_SERVICE_TX_H);    
+    blePeripheral.addAttribute(UART_SERVICE_RX_H);    
 }
+
+
+
+/**@brief   Function for the Advertising functionality initialization.
+ *
+ * @details Encodes the required advertising data and passes it to the stack.
+ *          Also builds a structure to be passed to the stack when starting advertising.
+ */
+//static void advertising_init(void)
+//{
+//    blePeripheral.setAdvertisingInterval(ADVERTISING_INTERVAL);    
+//}
 
 /**
  * @brief Get the cpiID object
@@ -390,10 +490,9 @@ void get_cpiID()
 void leds_init()
 {
     pinMode(PIN_LED1, OUTPUT);
-
-    // pinMode(PIN_LED2, OUTPUT);
-    // pinMode(PIN_LED3, OUTPUT);
-    // pinMode(PIN_LED4, OUTPUT);    
+    pinMode(PIN_LED2, OUTPUT);
+    pinMode(PIN_LED3, OUTPUT);
+    pinMode(PIN_LED4, OUTPUT);    
 }
 
 /**
@@ -402,7 +501,7 @@ void leds_init()
  */
 void setup()
 {
-    // Serial.begin(115200);
+    Serial.begin(115200);
     
     // pinMode(GI_TMP_PIN, INPUT);
     pinMode(GI_BAT_PIN, INPUT);
@@ -410,18 +509,22 @@ void setup()
     analogReadResolution(12);
 
     leds_init();
+    pinMode(PIN_BUTTON1, INPUT);
+
+
     get_cpiID();
 
     blePeripheral.setLocalName(LOCALNAME);
     blePeripheral.setDeviceName(DEVICE_NAME);
     // blePeripheral.setAppearance(0x0080);
 
+    // gap_params_init();
     services_init();
+    // advertising_init();
 
+    blePeripheral.setConnectionInterval(200, 500);
     blePeripheral.setAdvertisingInterval(ADVERTISING_INTERVAL);    
-    //blePeripheral.setConnectionInterval(1000, 5000);
     blePeripheral.setTxPower(TX_POWER);
-
 
     blePeripheral.setEventHandler(BLEConnected, blePeripheralConnectHandler);
     blePeripheral.setEventHandler(BLEDisconnected, blePeripheralDisconnectHandler);
@@ -436,13 +539,13 @@ void setup()
 
     updateAdvertisingScanData(0);
 
-    //adc_init();
-    //start_timer_1();
-    //start_timer_2();
+    // adc_init();
+    // start_timer_1();
+    // start_timer_2();
 
-    //NRF_ADC->TASKS_STOP = 1;					
-    //NRF_TIMER1->TASKS_STOP = 1; // Start TIMER1
-    //NRF_TIMER2->TASKS_STOP = 1; // Start TIMER2
+    // NRF_ADC->TASKS_STOP = 1;					
+    // NRF_TIMER1->TASKS_STOP = 1; // Start TIMER1
+    // NRF_TIMER2->TASKS_STOP = 1; // Start TIMER2
 
     // DEBUG_PRINTLN("");
     // DEBUG_PRINTLN("=============");
@@ -454,9 +557,11 @@ void setup()
     // DEBUG_PRINTLN("NRF_POWER_MODE_LOWPWR");	
     // DEBUG_PRINTLN("=============");
 
+    attachInterrupt(PIN_BUTTON1, wakeUp, RISING);
 
     // enable low power mode without interrupt
-    sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
+    sd_power_mode_set(NRF_POWER_MODE_LOWPWR); //     sd_power_mode_set(SD_POWER_SYSTEM_OFF);
+
 }
 
 /**
@@ -478,15 +583,54 @@ String getVoltage()
  */
 void loop()
 {
-    
     // Enter Low power mode
     sd_app_evt_wait();
-
     // Exit Low power mode
 
     // Clear IRQ flag to be able to go to sleep if nothing happens in between
     sd_nvic_ClearPendingIRQ(SWI2_IRQn);
+    
+    blePeripheral.poll();
+    BLECentral central = blePeripheral.central();
 
+    // If Connected client BLE
+    if (central)
+    {
+        // If Connected client BLE
+        while (central.connected())
+        {
+            time_connect = millis();
+
+            digitalWrite(PIN_LED1, HIGH);
+            delay(200); 
+            digitalWrite(PIN_LED1, LOW);
+            delay(200); 
+
+            sd_nvic_ClearPendingIRQ(SWI2_IRQn);
+
+            digitalWrite(PIN_LED2, HIGH);
+            delay(200); 
+            digitalWrite(PIN_LED2, LOW);
+            delay(200); 
+
+            sd_nvic_ClearPendingIRQ(SWI2_IRQn);
+
+            digitalWrite(PIN_LED3, HIGH);
+            delay(200); 
+            digitalWrite(PIN_LED3, LOW);
+            delay(200); 
+
+            sd_nvic_ClearPendingIRQ(SWI2_IRQn);
+
+            digitalWrite(PIN_LED4, HIGH);
+            delay(200); 
+            digitalWrite(PIN_LED4, LOW);
+            delay(500); 
+
+            sd_nvic_ClearPendingIRQ(SWI2_IRQn);
+        }
+
+    }
 
     //digitalWrite(PIN_LED1, HIGH);
     //delay(500); 
@@ -511,31 +655,33 @@ void loop()
     // (unsigned char*)&value, sizeof(T)
 
     // Clear IRQ flag to be able to go to sleep if nothing happens in between
-    sd_nvic_ClearPendingIRQ(SWI2_IRQn);
+    //sd_nvic_ClearPendingIRQ(SWI2_IRQn);
 
     // updateAdvertisingScanData(local_time);
 
-    blePeripheral.poll();
+    //blePeripheral.poll();
 
-    BLECentral central = blePeripheral.central();
+    //BLECentral central = blePeripheral.central();
 
-    if (central)
+   /* if (central)
     {
         time_connect = millis();
 
         while (central.connected())
         {
-            if(millis() > time_connect + 60000) 
+            if(millis() > time_connect + APP_ADV_TIMEOUT_IN_SECONDS * 1000) 
             {
                 central.disconnect();
                 break;
             }
 
             local_time = millis();
-            TIME_LOCAL_DP_H.setValue(local_time); 
+         /////   TIME_LOCAL_DP_H.setValue(local_time); 
 
-            float temperature = 36.6;//sensors.getTempCByIndex(0);
-            TEMP_LEVEL_INPUT_DP_H.writeValue((String)temperature);
+            int32_t temperature = 0;   
+            sd_temp_get(&temperature);
+            float t = temperature / 4.0;
+            TEMP_LEVEL_INPUT_DP_H.writeValue((String)t);
 
             int bat_level = analogRead(GI_BAT_PIN);
             float battery_voltage = ((float)bat_level / 2800.0) * 3.3 * (3300.0 / 2800.0);
@@ -543,9 +689,9 @@ void loop()
 
             sd_nvic_ClearPendingIRQ(SWI2_IRQn);
 
-            if (TIME_CURRENT_DP_H.written())
+            if (UART_SERVICE_RX_H.written())
             {
-                unsigned long new_time = TIME_CURRENT_DP_H.value();
+                unsigned long new_time = UART_SERVICE_RX_H.value();
                 updateAdvertisingScanData(new_time);
 
             }
@@ -553,6 +699,7 @@ void loop()
             delay(1000);
         }
     } 
+    */
 
     sd_app_evt_wait();		
 }
