@@ -40,7 +40,7 @@
 #define BATTERY_SERVICE_UUID                    "180F"
 #define BATT_LEVEL                              "2A19"      // VALUE: batVal Int, Prop: Read | Notify
 
-//// Time information service ////
+//// UART_SERVICE ////
 /**********************************************************************************************/
 #define UART_SERVICE_UUID                       "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"    /////////////////////////////////1805
 #define UART_SERVICE_TX                         "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"      // VALUE: batVal Int, Prop: Write
@@ -52,17 +52,15 @@
 */
 
 #define BLE_ADV_DIRECTED_ENABLED                true
-#define ADVERTISING_INTERVAL                    5000                                /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
+#define ADVERTISING_INTERVAL                    5                                   /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
 
-#define APP_ADV_TIMEOUT_IN_SECONDS              360                                  /**< The advertising timeout (in units of seconds). */
-
+#define APP_ADV_TIMEOUT_IN_SECONDS              5                                   /**< The advertising timeout (in units of seconds). */
 
 
 #define MIN_CONN_INTERVAL                       (double)7.5                         /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
 #define MAX_CONN_INTERVAL                       60                                  /**< Maximum acceptable connection interval (75 ms), Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                           0                                   /**< slave latency. */
-#define CONN_SUP_TIMEOUT                        40000                                 /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
-
+#define CONN_SUP_TIMEOUT                        40000                               /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
 
 
 #define TX_POWER                                0
@@ -73,11 +71,13 @@
 #define FIRMWARE                                "1.0.0"
 #define REVISION                                "1.0"
 
+
+
 // #define UART_TX_BUF_SIZE                        256                                 /**< UART TX buffer size. */
 // #define UART_RX_BUF_SIZE                        256                                 /**< UART RX buffer size. */
 
-#define GI_BAT_PIN                              A4                                  // Board pin p0.30 Batt analog
-#define GI_TMP_PIN                              5                                   // Board pin p0.30 Temp analog
+// #define GI_BAT_PIN                              A4                                  // Board pin p0.30 Batt analog
+// #define GI_TMP_PIN                              5                                   // Board pin p0.30 Temp analog
 
 /*
 #define ADC_REF_VOLTAGE_IN_MILLIVOLTS           3300

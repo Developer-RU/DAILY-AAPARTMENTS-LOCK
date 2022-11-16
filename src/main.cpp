@@ -1,29 +1,23 @@
 #include "main.hpp"
 
 
-#include <stdint.h>
-#include <string.h>
-#include "nrf.h"
-#include "nrf51_bitfields.h"
-#include "ble_hci.h"
-
-
-
 
 #ifdef __cplusplus
+
 extern "C" {
-#endif
-//void SWI2_IRQn(void);
-void wakeUp();
+    #endif
 
-void SWI2_IRQHandler(void);
-//void TIMER1_IRQHandler(void);
-//void TIMER2_IRQHandler(void);
-//void ADC_IRQHandler(void);
-#ifdef __cplusplus
+        void SWI2_IRQWakeUp(void);
+        void SWI2_IRQHandler(void);
+
+        void TIMER1_IRQHandler(void);
+        void TIMER2_IRQHandler(void);
+        void ADC_IRQHandler(void);
+
+    #ifdef __cplusplus
 }
-#endif
 
+#endif
 
 // BLEBoolCharacteristic
 // BLECharCharacteristic
@@ -51,30 +45,30 @@ BLECharCharacteristic GenericAccess_Appearance_DP_H = BLECharCharacteristic(GENE
 
 //// Device information service ////
 BLEService DeviceInformation_PS_H = BLEService(DEVICE_INFO_SERVICE_UUID);
-BLEStringCharacteristic DeviceInformation_ModName_DP_H = BLEStringCharacteristic(DEVICE_INFO_MOD_NAME, BLERead, sizeof((String)DEVICE_INFO_MOD_NAME));
+//BLEStringCharacteristic DeviceInformation_ModName_DP_H = BLEStringCharacteristic(DEVICE_INFO_MOD_NAME, BLERead, sizeof((String)DEVICE_INFO_MOD_NAME));
 BLEStringCharacteristic DeviceInformation_SerialN_DP_H = BLEStringCharacteristic(DEVICE_INFO_SERIAL_N, BLERead, sizeof((String)DEVICE_INFO_SERIAL_N));
 BLEStringCharacteristic DeviceInformation_FirmRev_DP_H = BLEStringCharacteristic(DEVICE_INFO_FIRM_REV, BLERead, sizeof((String)DEVICE_INFO_FIRM_REV));
-BLEStringCharacteristic DeviceInformation_HardRev_DP_H = BLEStringCharacteristic(DEVICE_INFO_HARD_REV, BLERead, sizeof((String)DEVICE_INFO_HARD_REV));
-BLEStringCharacteristic DeviceInformation_SoftRev_DP_H = BLEStringCharacteristic(DEVICE_INFO_SOFT_REV, BLERead, sizeof((String)DEVICE_INFO_SOFT_REV));
-BLEStringCharacteristic DeviceInformation_ManName_DP_H = BLEStringCharacteristic(DEVICE_INFO_MAN_NAME, BLERead, sizeof((String)DEVICE_INFO_MAN_NAME));
+//BLEStringCharacteristic DeviceInformation_HardRev_DP_H = BLEStringCharacteristic(DEVICE_INFO_HARD_REV, BLERead, sizeof((String)DEVICE_INFO_HARD_REV));
+//BLEStringCharacteristic DeviceInformation_SoftRev_DP_H = BLEStringCharacteristic(DEVICE_INFO_SOFT_REV, BLERead, sizeof((String)DEVICE_INFO_SOFT_REV));
+//BLEStringCharacteristic DeviceInformation_ManName_DP_H = BLEStringCharacteristic(DEVICE_INFO_MAN_NAME, BLERead, sizeof((String)DEVICE_INFO_MAN_NAME));
 
 //// Led service ////
 // BLEService LedService = BLEService(LED_STATE_SERVICE_UUID);
 // BLECharCharacteristic StateLedCharacteristic = BLECharCharacteristic(LED_STATE_SWITH, BLERead | BLEWrite);
 
 //// Temp information service ////
-BLEService TEMP_PS_H = BLEService(TEMP_SERVICE_UUID);
-BLEStringCharacteristic TEMP_LEVEL_INPUT_DP_H = BLEStringCharacteristic(TEMP_LEVEL, BLERead | BLENotify, sizeof((String)TEMP_LEVEL));
+//BLEService TEMP_PS_H = BLEService(TEMP_SERVICE_UUID);
+//BLEStringCharacteristic TEMP_LEVEL_INPUT_DP_H = BLEStringCharacteristic(TEMP_LEVEL, BLERead | BLENotify, sizeof((String)TEMP_LEVEL));
 
 //// Battery information service ////
-BLEService BATT_PS_H = BLEService(BATTERY_SERVICE_UUID);
-BLEStringCharacteristic BATT_LEVEL_INPUT_DP_H = BLEStringCharacteristic(BATT_LEVEL, BLERead | BLENotify, sizeof((String)BATT_LEVEL));
+//BLEService BATT_PS_H = BLEService(BATTERY_SERVICE_UUID);
+//BLEStringCharacteristic BATT_LEVEL_INPUT_DP_H = BLEStringCharacteristic(BATT_LEVEL, BLERead | BLENotify, sizeof((String)BATT_LEVEL));
 
 //// UART service ////
 BLEService UART_SERVICE_H = BLEService(UART_SERVICE_UUID);
-BLEUnsignedLongCharacteristic UART_SERVICE_RX_H = BLEUnsignedLongCharacteristic(UART_SERVICE_RX, BLEWrite);
-BLEUnsignedLongCharacteristic UART_SERVICE_TX_H = BLEUnsignedLongCharacteristic(UART_SERVICE_TX, BLERead | BLENotify);
-
+BLEStringCharacteristic UART_SERVICE_RX_H = BLEStringCharacteristic(UART_SERVICE_RX, BLEWrite, sizeof((String)UART_SERVICE_RX));
+BLEStringCharacteristic UART_SERVICE_TX_H = BLEStringCharacteristic(UART_SERVICE_TX, BLERead | BLENotify, sizeof((String)UART_SERVICE_TX));
+BLEDescriptor UART_SERVICE_DESCRIPTOR = BLEDescriptor("2902", "BLE UART");
 
 String cpuID = "";
 
@@ -87,67 +81,12 @@ unsigned long current_time = 0;
 // unsigned long counterTick = 0;
 
 
+bool new_command = 0;       // 0 - open, 1 - close
+bool command = 0;           // 0 - open, 1 - close
 
+bool state = 0;             // 0 - open, 1 - close
+bool new_state = 0;         // 0 - open, 1 - close
 
-
-
-
-
-/**@brief     Error handler function, which is called when an error has occurred.
- *
- * @warning   This handler is an example only and does not fit a final product. You need to analyze
- *            how your product is supposed to react in case of error.
- *
- * @param[in] error_code  Error code supplied to the handler.
- * @param[in] line_num    Line number where the handler is called.
- * @param[in] p_file_name Pointer to the file name. 
- */
-void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p_file_name)
-{
-    // This call can be used for debug purposes during application development.
-    // @note CAUTION: Activating this code will write the stack to flash on an error.
-    //                This function should NOT be used in a final product.
-    //                It is intended STRICTLY for development/debugging purposes.
-    //                The flash write will happen EVEN if the radio is active, thus interrupting
-    //                any communication.
-    //                Use with care. Un-comment the line below to use.
-    //ble_debug_assert_handler(error_code, line_num, p_file_name);
-
-    // On assert, the system can only recover with a reset.
-    NVIC_SystemReset();
-}
-
-/**@brief   Function for the GAP initialization.
- *
- * @details This function will setup all the necessary GAP (Generic Access Profile)
- *          parameters of the device. It also sets the permissions and appearance.
- */
-/*
-static void gap_params_init(void)
-{
-    uint32_t                err_code;
-    ble_gap_conn_params_t   gap_conn_params;
-    ble_gap_conn_sec_mode_t sec_mode;
-
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
-    
-    err_code = sd_ble_gap_device_name_set(&sec_mode,
-                                          (const uint8_t *) DEVICE_NAME,
-                                          strlen(DEVICE_NAME));
-    // APP_ERROR_CHECK(err_code);
-
-    memset(&gap_conn_params, 0, sizeof(gap_conn_params));
-
-    gap_conn_params.min_conn_interval = MIN_CONN_INTERVAL;
-    gap_conn_params.max_conn_interval = MAX_CONN_INTERVAL;
-    gap_conn_params.slave_latency     = SLAVE_LATENCY;
-    gap_conn_params.conn_sup_timeout  = CONN_SUP_TIMEOUT;
-
-    err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
-    
-    // APP_ERROR_CHECK(err_code);
-}
-*/
 
 /**
  * @brief 
@@ -286,21 +225,78 @@ void SWI2_IRQHandler(void)
     // sd_power_system_off();
 }
 
-
-
-void wakeUp()
+/**
+ * @brief 
+ * 
+ */
+void SWI2_IRQWakeUp(void)
 {
-    digitalWrite(PIN_LED1, !digitalRead(PIN_LED1));
-    delay(200);
+    //Serial.println("New state registered");
+
+    if(digitalRead(PIN_BUTTON1) == LOW && state == 1) 
+    {
+        new_state = 1;
+        state = 0;
+    }
+    else if(digitalRead(PIN_BUTTON1) == HIGH && state == 0) 
+    {
+        new_state = 1;
+        state = 1;
+    }
 }
 
+/**@brief     Error handler function, which is called when an error has occurred.
+ *
+ * @warning   This handler is an example only and does not fit a final product. You need to analyze
+ *            how your product is supposed to react in case of error.
+ *
+ * @param[in] error_code  Error code supplied to the handler.
+ * @param[in] line_num    Line number where the handler is called.
+ * @param[in] p_file_name Pointer to the file name. 
+ */
+void app_error_handler(uint32_t error_code, uint32_t line_num, const uint8_t * p_file_name)
+{
+    // This call can be used for debug purposes during application development.
+    // @note CAUTION: Activating this code will write the stack to flash on an error.
+    //                This function should NOT be used in a final product.
+    //                It is intended STRICTLY for development/debugging purposes.
+    //                The flash write will happen EVEN if the radio is active, thus interrupting
+    //                any communication.
+    //                Use with care. Un-comment the line below to use.
+    //ble_debug_assert_handler(error_code, line_num, p_file_name);
 
+    // On assert, the system can only recover with a reset.
+    NVIC_SystemReset();
+}
 
+/**@brief   Function for the GAP initialization.
+ *
+ * @details This function will setup all the necessary GAP (Generic Access Profile)
+ *          parameters of the device. It also sets the permissions and appearance.
+ */
+static void gap_params_init(void)
+{
+    ble_gap_conn_params_t   gap_conn_params;
+    ble_gap_conn_sec_mode_t sec_mode;
+
+    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
+    
+    sd_ble_gap_device_name_set(&sec_mode, (const uint8_t *) DEVICE_NAME, strlen(DEVICE_NAME));
+
+    memset(&gap_conn_params, 0, sizeof(gap_conn_params));
+
+    gap_conn_params.min_conn_interval = MIN_CONN_INTERVAL;
+    gap_conn_params.max_conn_interval = MAX_CONN_INTERVAL;
+    gap_conn_params.slave_latency     = SLAVE_LATENCY;
+    gap_conn_params.conn_sup_timeout  = CONN_SUP_TIMEOUT;
+
+    sd_ble_gap_ppcp_set(&gap_conn_params);
+}
 
 /**
  * @brief 
  * 
- * @param new_time 
+ * @param new_time data
  */
 void updateAdvertisingScanData(unsigned long new_time)
 {
@@ -361,6 +357,29 @@ void updateAdvertisingScanData(unsigned long new_time)
  */
 void characteristicWrittenCallback(BLECentral& central, BLECharacteristic& characteristic) 
 {
+    // central wrote new value to characteristic
+    if (UART_SERVICE_RX_H.value()) 
+    {
+        String message =  UART_SERVICE_RX_H.value();
+
+        //Serial.println("*********");
+        //Serial.print("Received Value: ");
+
+        //Serial.print(message);
+
+        //Serial.println();
+        //Serial.println("*********");
+
+        if(message.indexOf("open") > -1) { command = 1; new_command = 1; }
+        
+        if(message.indexOf("close") > -1) { command = 0; new_command = 1; }
+
+        if(message.indexOf("speed") > -1) { blePeripheral.setAdvertisingInterval(1000); }
+
+        if(message.indexOf("norm") > -1) { blePeripheral.setAdvertisingInterval(ADVERTISING_INTERVAL * 1000); }
+
+    }
+
     // central wrote new value to characteristic, set state (LED)
     //if (StateLedCharacteristic.value()) 
     //{
@@ -369,26 +388,6 @@ void characteristicWrittenCallback(BLECentral& central, BLECharacteristic& chara
     //else 
     //{
     //    // digitalWrite(PIN_LED2, LOW);
-    //}
-
-    // central wrote new value to characteristic, get temp (TEMP_LEVEL_INPUT_DP_H)
-    //if (TEMP_LEVEL_INPUT_DP_H.value()) 
-    //{
-    //    // digitalWrite(PIN_LED3, HIGH);
-    //}
-    //else 
-    //{
-    //    // digitalWrite(PIN_LED3, LOW);
-    //}
-
-    // central wrote new value to characteristic, get power (BATT_LEVEL_INPUT_DP_H)
-    //if (BATT_LEVEL_INPUT_DP_H.value()) 
-    //{
-    //    // digitalWrite(PIN_LED4, HIGH);
-    //}
-    //else 
-    //{
-    //    // digitalWrite(PIN_LED4, LOW);
     //}
 }
 
@@ -421,22 +420,26 @@ void blePeripheralDisconnectHandler(BLECentral& central)
 void services_init()
 {
     //// Gap service ////
-    blePeripheral.setAdvertisedServiceUuid(GenericAccess_PS_H.uuid());
-    blePeripheral.addAttribute(GenericAccess_PS_H);
-    blePeripheral.addAttribute(GenericAccess_DeviceName_DP_H);
-    blePeripheral.addAttribute(CONN_PARAM_DP_H);
-    
+    /* 
+        blePeripheral.setAdvertisedServiceUuid(GenericAccess_PS_H.uuid());
+        blePeripheral.addAttribute(GenericAccess_PS_H);
+        blePeripheral.addAttribute(GenericAccess_DeviceName_DP_H);
+        blePeripheral.addAttribute(CONN_PARAM_DP_H);
+    */
+
     //// Gatt ////
-    blePeripheral.setAdvertisedServiceUuid(GenericAttribute_PS_H.uuid());
-    blePeripheral.addAttribute(GenericAttribute_PS_H);
-    blePeripheral.addAttribute(GenericAccess_Appearance_DP_H);
+    /* 
+        blePeripheral.setAdvertisedServiceUuid(GenericAttribute_PS_H.uuid());
+        blePeripheral.addAttribute(GenericAttribute_PS_H);
+        blePeripheral.addAttribute(GenericAccess_Appearance_DP_H);
+    */
 
     //// Device information service ////
-    blePeripheral.setAdvertisedServiceUuid(DeviceInformation_PS_H.uuid());
+    /*blePeripheral.setAdvertisedServiceUuid(DeviceInformation_PS_H.uuid());
     blePeripheral.addAttribute(DeviceInformation_PS_H);
     blePeripheral.addAttribute(DeviceInformation_SerialN_DP_H); 
-    blePeripheral.addAttribute(DeviceInformation_FirmRev_DP_H); 
-    blePeripheral.addAttribute(DeviceInformation_HardRev_DP_H); 
+    blePeripheral.addAttribute(DeviceInformation_FirmRev_DP_H); */
+    //blePeripheral.addAttribute(DeviceInformation_HardRev_DP_H); 
 
     //// Led service ////
     // blePeripheral.setAdvertisedServiceUuid(LedService.uuid());
@@ -444,39 +447,41 @@ void services_init()
     // blePeripheral.addAttribute(StateLedCharacteristic);
 
     //// Temp information service ////
-    blePeripheral.setAdvertisedServiceUuid(TEMP_PS_H.uuid());
-    blePeripheral.addAttribute(TEMP_PS_H);
-    blePeripheral.addAttribute(TEMP_LEVEL_INPUT_DP_H);
+    //blePeripheral.setAdvertisedServiceUuid(TEMP_PS_H.uuid());
+    //blePeripheral.addAttribute(TEMP_PS_H);
+    //blePeripheral.addAttribute(TEMP_LEVEL_INPUT_DP_H);
 
     //// Battery information service ////
-    blePeripheral.setAdvertisedServiceUuid(BATT_PS_H.uuid());
-    blePeripheral.addAttribute(BATT_PS_H);
-    blePeripheral.addAttribute(BATT_LEVEL_INPUT_DP_H);  
+    //blePeripheral.setAdvertisedServiceUuid(BATT_PS_H.uuid());
+    //blePeripheral.addAttribute(BATT_PS_H);
+    //blePeripheral.addAttribute(BATT_LEVEL_INPUT_DP_H);  
 
     //// UART service ////
     blePeripheral.setAdvertisedServiceUuid(UART_SERVICE_H.uuid());
     blePeripheral.addAttribute(UART_SERVICE_H);
     blePeripheral.addAttribute(UART_SERVICE_TX_H);    
-    blePeripheral.addAttribute(UART_SERVICE_RX_H);    
+    blePeripheral.addAttribute(UART_SERVICE_RX_H);
+    blePeripheral.addAttribute(UART_SERVICE_DESCRIPTOR);
+
+       
 }
-
-
 
 /**@brief   Function for the Advertising functionality initialization.
  *
  * @details Encodes the required advertising data and passes it to the stack.
  *          Also builds a structure to be passed to the stack when starting advertising.
  */
-//static void advertising_init(void)
-//{
-//    blePeripheral.setAdvertisingInterval(ADVERTISING_INTERVAL);    
-//}
+void advertising_init()
+{
+    // blePeripheral.setConnectionInterval(200, 5000);
+    blePeripheral.setAdvertisingInterval(ADVERTISING_INTERVAL * 1000);    
+}
 
 /**
  * @brief Get the cpiID object
  * 
  */
-void get_cpiID()
+void get_cpuID()
 {
     // DEBUG_PRINTLN("SAADC Low Power Example; built on " __DATE__ " at " __TIME__ " for " BOARD_STR );	
     // cpuID += NRF_FICR->DEVICEADDR[1];	
@@ -487,12 +492,13 @@ void get_cpiID()
  * @brief 
  * 
  */
-void leds_init()
+void gpio_output_init()
 {
-    pinMode(PIN_LED1, OUTPUT);
-    pinMode(PIN_LED2, OUTPUT);
-    pinMode(PIN_LED3, OUTPUT);
-    pinMode(PIN_LED4, OUTPUT);    
+    //pinMode(PIN_LED1, OUTPUT); 
+    pinMode(PIN_LED2, OUTPUT); digitalWrite(PIN_LED2, LOW);
+    pinMode(PIN_LED3, OUTPUT); digitalWrite(PIN_LED3, LOW);
+    //pinMode(PIN_LED4, OUTPUT);    
+    //pinMode(PIN_LED5, OUTPUT);    
 }
 
 /**
@@ -501,41 +507,44 @@ void leds_init()
  */
 void setup()
 {
-    Serial.begin(115200);
+    //Serial.begin(115200);
     
     // pinMode(GI_TMP_PIN, INPUT);
-    pinMode(GI_BAT_PIN, INPUT);
+    // pinMode(GI_BAT_PIN, INPUT);
 
-    analogReadResolution(12);
+    // analogReadResolution(12);
 
-    leds_init();
     pinMode(PIN_BUTTON1, INPUT);
+    // digitalWrite(PIN_BUTTON1, HIGH);
 
+    gpio_output_init();
 
-    get_cpiID();
+    get_cpuID();
 
     blePeripheral.setLocalName(LOCALNAME);
     blePeripheral.setDeviceName(DEVICE_NAME);
     // blePeripheral.setAppearance(0x0080);
 
-    // gap_params_init();
+    //gap_params_init();
     services_init();
-    // advertising_init();
+    advertising_init();
 
-    blePeripheral.setConnectionInterval(200, 500);
-    blePeripheral.setAdvertisingInterval(ADVERTISING_INTERVAL);    
+    // blePeripheral.setConnectionInterval(200, 5000);
+    // blePeripheral.setAdvertisingInterval(ADVERTISING_INTERVAL * 1000);   
+
     blePeripheral.setTxPower(TX_POWER);
 
     blePeripheral.setEventHandler(BLEConnected, blePeripheralConnectHandler);
     blePeripheral.setEventHandler(BLEDisconnected, blePeripheralDisconnectHandler);
 
-    // StateLedCharacteristic.setEventHandler(BLEWritten, characteristicWrittenCallback);
+    UART_SERVICE_RX_H.setEventHandler(BLEWritten, characteristicWrittenCallback);
+
 
     blePeripheral.begin();
 
     DeviceInformation_SerialN_DP_H.writeValue((String)NRF_FICR->DEVICEADDR[0]);
     DeviceInformation_FirmRev_DP_H.writeValue((String)FIRMWARE);
-    DeviceInformation_HardRev_DP_H.writeValue((String)REVISION);
+    //DeviceInformation_HardRev_DP_H.writeValue((String)REVISION);
 
     updateAdvertisingScanData(0);
 
@@ -557,7 +566,7 @@ void setup()
     // DEBUG_PRINTLN("NRF_POWER_MODE_LOWPWR");	
     // DEBUG_PRINTLN("=============");
 
-    attachInterrupt(PIN_BUTTON1, wakeUp, RISING);
+    attachInterrupt(PIN_BUTTON1, SWI2_IRQWakeUp, RISING);
 
     // enable low power mode without interrupt
     sd_power_mode_set(NRF_POWER_MODE_LOWPWR); //     sd_power_mode_set(SD_POWER_SYSTEM_OFF);
@@ -583,9 +592,38 @@ String getVoltage()
  */
 void loop()
 {
+    // Clear IRQ flag to be able to go to sleep if nothing happens in between
+    sd_nvic_ClearPendingIRQ(SWI2_IRQn);
+    
+    if(new_state == 1)
+    {
+        if(state == 0) 
+        {
+            updateAdvertisingScanData(0); 
+            //digitalWrite(PIN_LED5, LOW);
+        }
+        else
+        {
+            updateAdvertisingScanData(1);
+           //digitalWrite(PIN_LED5, HIGH);
+        } 
+
+        new_state = 0;
+        delay(10);
+    }
+
+    // Clear IRQ flag to be able to go to sleep if nothing happens in between
+    sd_nvic_ClearPendingIRQ(SWI2_IRQn);
+
     // Enter Low power mode
-    sd_app_evt_wait();
+    // sd_app_evt_wait();
+
     // Exit Low power mode
+
+    // digitalWrite(PIN_LED1, HIGH);
+    // delay(200); 
+    // digitalWrite(PIN_LED1, LOW);
+    // delay(100);
 
     // Clear IRQ flag to be able to go to sleep if nothing happens in between
     sd_nvic_ClearPendingIRQ(SWI2_IRQn);
@@ -596,45 +634,66 @@ void loop()
     // If Connected client BLE
     if (central)
     {
+
+        //Serial.println("Connected");
+        
+        time_connect = millis();
+
         // If Connected client BLE
         while (central.connected())
         {
-            time_connect = millis();
+            if(new_state == 1)
+            {
+                if(state == 0) 
+                {
+                    updateAdvertisingScanData(0); 
+                    //digitalWrite(PIN_LED5, LOW);
+                }
+                else
+                {
+                    updateAdvertisingScanData(1);
+                    //digitalWrite(PIN_LED5, HIGH);
+                } 
 
-            digitalWrite(PIN_LED1, HIGH);
-            delay(200); 
-            digitalWrite(PIN_LED1, LOW);
-            delay(200); 
+                new_state = 0;
+            }
 
-            sd_nvic_ClearPendingIRQ(SWI2_IRQn);
+            if(new_command == 1)
+            {
+                new_command = 0;
 
-            digitalWrite(PIN_LED2, HIGH);
-            delay(200); 
-            digitalWrite(PIN_LED2, LOW);
-            delay(200); 
+                if(command == 0)
+                {
+                    digitalWrite(PIN_LED2, HIGH);
+                    delay(500); 
+                    digitalWrite(PIN_LED2, LOW);
 
-            sd_nvic_ClearPendingIRQ(SWI2_IRQn);
+                    time_connect = millis() + APP_ADV_TIMEOUT_IN_SECONDS * 1000;
+                }
 
-            digitalWrite(PIN_LED3, HIGH);
-            delay(200); 
-            digitalWrite(PIN_LED3, LOW);
-            delay(200); 
+                if(command == 1)
+                {           
+                    digitalWrite(PIN_LED3, HIGH);
+                    delay(500); 
+                    digitalWrite(PIN_LED3, LOW);
+    
+                    time_connect = millis() + APP_ADV_TIMEOUT_IN_SECONDS * 1000;
+                }
+            }
 
-            sd_nvic_ClearPendingIRQ(SWI2_IRQn);
+            if(millis() > time_connect + APP_ADV_TIMEOUT_IN_SECONDS * 1000) { central.disconnect(); blePeripheral.disconnect(); }
 
-            digitalWrite(PIN_LED4, HIGH);
-            delay(200); 
-            digitalWrite(PIN_LED4, LOW);
-            delay(500); 
-
+            delay(10); 
             sd_nvic_ClearPendingIRQ(SWI2_IRQn);
         }
-
+            
+        //Serial.println("Disconnected");
     }
 
-    //digitalWrite(PIN_LED1, HIGH);
-    //delay(500); 
-    //digitalWrite(PIN_LED1, LOW);
+    // central.disconnect();
+    // blePeripheral.disconnect();
+
+    sd_app_evt_wait();		
 
     /*
     lastTime = millis();
@@ -700,6 +759,4 @@ void loop()
         }
     } 
     */
-
-    sd_app_evt_wait();		
 }
